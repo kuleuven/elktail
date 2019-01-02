@@ -10,10 +10,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/urfave/cli"
-	"golang.org/x/crypto/ssh/terminal"
-	"golang.org/x/net/context"
-	"gopkg.in/olivere/elastic.v5"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -21,6 +17,11 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/olivere/elastic"
+	"github.com/urfave/cli"
+	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/net/context"
 )
 
 //
@@ -90,7 +91,7 @@ func NewTail(configuration *Configuration) *Tail {
 	if cert != "" && key != "" {
 		cert, err := tls.LoadX509KeyPair(cert, key)
 		if err != nil {
-		    Error.Fatalf("Bad certificate and/or key: %s", err)
+			Error.Fatalf("Bad certificate and/or key: %s", err)
 		}
 		tlsConfig := &tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -354,12 +355,19 @@ func extractYMDDate(dateStr, separator string) time.Time {
 	dateRegexp := regexp.MustCompile(fmt.Sprintf(`(\d{4}%s\d{2}%s\d{2})`, separator, separator))
 	match := dateRegexp.FindAllStringSubmatch(dateStr, -1)
 	if len(match) == 0 {
-		Error.Fatalf("Failed to extract date: %s\n", dateStr)
+		dateRegexp = regexp.MustCompile(fmt.Sprintf(`(\d{4}%s\d{2})`, separator)) // YMD format not found, try YM format
+		match = dateRegexp.FindAllStringSubmatch(dateStr, -1)
+		if len(match) == 0 {
+			Error.Fatalf("Failed to extract date: %s\n", dateStr)
+		}
 	}
 	result := match[0]
 	parsed, err := time.Parse(fmt.Sprintf("2006%s01%s02", separator, separator), result[0])
 	if err != nil {
-		Error.Fatalf("Failed parsing date: %s", err)
+		parsed, err = time.Parse(fmt.Sprintf("2006%s01", separator), result[0]) // YMD format isn't cutting it, try YM format
+		if err != nil {
+			Error.Fatalf("Failed parsing date: %s", err)
+		}
 	}
 	return parsed
 }
